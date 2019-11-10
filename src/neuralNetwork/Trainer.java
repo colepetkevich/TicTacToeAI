@@ -7,11 +7,11 @@ import java.util.Arrays;
 
 import tictactoe.DataSetInterpreter;
 
-public class Tester 
+public class Trainer 
 {
 	private static final String NETWORK_FILE_PATH = "src/NeuralNetwork.dat";
 	private static final String DATA_SET_FILE_PATH = "src/TicTacToeGameDataSet.txt";
-	private static final int NUMBER_OF_CHECKS = 1000000;
+	private static final int NUMBER_OF_CHECKS = 2500;
 	private static final int CHECKS_PER_SAVE = 2500;
 	
 	public static void main(String[] args)

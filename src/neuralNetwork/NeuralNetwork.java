@@ -127,31 +127,25 @@ public class NeuralNetwork
 				
 		//setting the input and output values for the input neurons
 		for (int i = 0; i < inputNeuronLayer.size(); i++)
-		{
-			inputNeuronLayer.get(i).setInput(input[i]);
 			inputNeuronLayer.get(i).setOutput(input[i]);
-		}
 		
 		//iterating through all the hidden layers
-		for (int i = 0; i < hiddenNeuronLayers.size(); i++)
+		for (NeuronLayer hiddenNeuronLayer: hiddenNeuronLayers)
 		{
 			//iterating through all the neurons in each hidden layer
-			NeuronLayer hiddenNeuronLayer = hiddenNeuronLayers.get(i);
 			for (int j = 0; j < hiddenNeuronLayer.size(); j++)
 			{
 				//finding current neuron
 				Neuron neuron = hiddenNeuronLayer.get(j);
-				double neuronInput = 0.0;
+				double neuronInput = neuron.getBias();
 				//calculating current neuron input and output based off the weights and inputs feeding into it
-				for (int k = 0; k < neuron.getPreviousWeights().length; k++)
-				{
-					Weight weight = neuron.getPreviousWeights()[k];
+				for (Weight weight: neuron.getPreviousWeights())
 					neuronInput += weight.getValue() * weight.getPreviousNeuron().getOutput();
-				}
+				
 				//setting the neuron input
-				neuron.setInput(neuronInput + neuron.getBias());
+				neuron.setInput(neuronInput);
 				//setting the neuron output using the input through the activation function
-				neuron.setOutput(activation(neuron.getInput()));
+				neuron.setOutput(activation(neuronInput));
 			}
 		}
 		
@@ -159,21 +153,19 @@ public class NeuralNetwork
 		{
 			//finding current neuron
 			Neuron neuron = outputNeuronLayer.get(i);
-			double neuronInput = 0.0;
+			double neuronInput = neuron.getBias();
 			//calculating current neuron input and output based off the weights and inputs feeding into it
-			for (int j = 0; j < neuron.getPreviousWeights().length; j++)
-			{
-				Weight weight = neuron.getPreviousWeights()[j];
+			for (Weight weight: neuron.getPreviousWeights())
 				neuronInput += weight.getValue() * weight.getPreviousNeuron().getOutput();
-			}
+			
 			//setting the neuron input
-			neuron.setInput(neuronInput + neuron.getBias());
+			neuron.setInput(neuronInput);
 			//setting the neuron output using the input through the activation function
-			neuron.setOutput(activation(neuron.getInput()));
+			neuron.setOutput(activation(neuronInput));
 		}
 	}
 	
-	private void backPropagate(double[] targetOutput/*, Neuron targetNeuron*/)
+	private void backPropagate(double[] targetOutput)
 	{		
 		for (int i = 0; i < outputNeuronLayer.size(); i++)
 			backPropagateOutputNeuron(targetOutput, outputNeuronLayer.get(i));
@@ -195,42 +187,26 @@ public class NeuralNetwork
 	{
 		neuron.setdErrorOverdOutput(errorDerivative(neuron.getOutput(), targetOutput[neuron.getIndex()]));
 		neuron.setdErrorOverdInput(activationDerivative(neuron.getInput()) * neuron.getdErrorOverdOutput());
-		
 		neuron.setBias(neuron.getBias() - BIAS_LEARNING_RATE * neuron.getdErrorOverdInput());
-		
-		Weight[] previousWeights = neuron.getPreviousWeights();
-		for (int j = 0; j < previousWeights.length; j++)
-		{
-			Weight weight = previousWeights[j];
-			Neuron previousNeuron = weight.getPreviousNeuron();
-			weight.setdErrorOverdWeight(previousNeuron.getOutput() * neuron.getdErrorOverdInput());
-			
-			weight.setValue(weight.getValue() - LEARNING_RATE * weight.getdErrorOverdWeight());
-		}
 	}
 	
 	private void backPropagateNeuron(Neuron neuron)
 	{
 		//setting dError/dOutput to the summation of next weights times the dError/dInput of the weights next neuron
-		Weight[] nextWeights = neuron.getNextWeights();
 		double neurondErrorOverdOuput = 0.0;
-		for (int k = 0; k < nextWeights.length; k++)
-			neurondErrorOverdOuput += nextWeights[k].getValue() * nextWeights[k].getNextNeuron().getdErrorOverdInput();
-		neuron.setdErrorOverdOutput(neurondErrorOverdOuput);
-		
-		neuron.setdErrorOverdInput(activationDerivative(neuron.getInput()) * neuron.getdErrorOverdOutput());
-		
-		neuron.setBias(neuron.getBias() - BIAS_LEARNING_RATE * neuron.getdErrorOverdInput());
-		
-		Weight[] previousWeights = neuron.getPreviousWeights();
-		for (int k = 0; k < previousWeights.length; k++)
+		for (Weight weight: neuron.getNextWeights())
 		{
-			Weight weight = previousWeights[k];
-			Neuron previousNeuron = weight.getPreviousNeuron();
-			weight.setdErrorOverdWeight(previousNeuron.getOutput() * neuron.getdErrorOverdInput());
+			Neuron nextNeuron = weight.getNextNeuron();
 			
+			weight.setdErrorOverdWeight(neuron.getOutput() * nextNeuron.getdErrorOverdInput());
 			weight.setValue(weight.getValue() - LEARNING_RATE * weight.getdErrorOverdWeight());
+			
+			neurondErrorOverdOuput += weight.getValue() * nextNeuron.getdErrorOverdInput();
 		}
+		
+		neuron.setdErrorOverdOutput(neurondErrorOverdOuput);
+		neuron.setdErrorOverdInput(activationDerivative(neuron.getInput()) * neuron.getdErrorOverdOutput());
+		neuron.setBias(neuron.getBias() - BIAS_LEARNING_RATE * neuron.getdErrorOverdInput());
 	}
 	
 	public double[] getOutput()
