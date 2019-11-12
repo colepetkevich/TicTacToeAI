@@ -339,8 +339,7 @@ public class TicTacToe extends JFrame implements ActionListener
 			if (isSinglePlayer && turn == O && getWinner() != X && !boardFull())
 			{
 				//predicting move and making sure it is valid
-				neuralNetwork.forwardPropagate(DataSetInterpreter.interpretCharInput(ticTacToe));
-				double[] prediction = neuralNetwork.getOutput();
+				double[] prediction = neuralNetwork.calculate(DataSetInterpreter.interpretCharInput(ticTacToe));
 				//System.out.println(Arrays.toString(prediction));
 				int predictionIndex = NeuralNetwork.maxIndex(prediction);
 				while (ticTacToe[predictionIndex] != EMPTY)

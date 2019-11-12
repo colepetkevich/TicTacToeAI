@@ -11,7 +11,7 @@ public class Trainer
 {
 	private static final String NETWORK_FILE_PATH = "src/NeuralNetwork.dat";
 	private static final String DATA_SET_FILE_PATH = "src/TicTacToeGameDataSet.txt";
-	private static final int NUMBER_OF_CHECKS = 2500;
+	private static final int NUMBER_OF_CHECKS = 100000;
 	private static final int CHECKS_PER_SAVE = 2500;
 	
 	public static void main(String[] args)
@@ -21,15 +21,9 @@ public class Trainer
 		//if there is already a file that saves the existing neural network use that one
 		if (new File(NETWORK_FILE_PATH).exists())
 			neuralNetwork = new NeuralNetwork(NETWORK_FILE_PATH);
-		//otherwise create a new random one
+		//otherwise create a new neural network
 		else
-		{
-			neuralNetwork = new NeuralNetwork(9, 9);
-			neuralNetwork.addHiddenLayer(12);
-			neuralNetwork.addHiddenLayer(15);
-			neuralNetwork.addHiddenLayer(12);
-			neuralNetwork.createWeights();
-		}
+			neuralNetwork = new NeuralNetwork(9, 12, 12, 9);
 				
 		DataSetInterpreter interpreter = new DataSetInterpreter();
 		interpreter.interpret(DATA_SET_FILE_PATH);
@@ -43,6 +37,7 @@ public class Trainer
 		System.out.println("Initial Accuracy: " + neuralNetwork.getAccuracy(inputs, outputs));
 		System.out.println("Initial Mean Squared Error: " + neuralNetwork.getMeanSquaredError(inputs, outputs));
 		System.out.println();
+		
 		
 		for (int i = 0; i < NUMBER_OF_CHECKS; i++)
 		{

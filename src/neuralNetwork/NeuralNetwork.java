@@ -16,224 +16,166 @@ public class NeuralNetwork
 {
 	private static final double LEARNING_RATE = .01;
 	private static final double BIAS_LEARNING_RATE =.0025;
-	
-	private NeuronLayer inputNeuronLayer;
-	private ArrayList<NeuronLayer> hiddenNeuronLayers;
-	private NeuronLayer outputNeuronLayer;
-	private ArrayList<Weight> weights;
-	
-	private int neuronCount;
-	private int weightCount;
 
-	//default constructor creates a new NeuralNetwork
-	public NeuralNetwork(int numOfInputNeurons, int numOfOutputNeurons)
-	{
-		//creating neuron arrays
-		inputNeuronLayer = new NeuronLayer(numOfInputNeurons);
-		outputNeuronLayer = new NeuronLayer(numOfOutputNeurons);
-		hiddenNeuronLayers = new ArrayList<NeuronLayer>();
-		
-		//setting input's next layer to output layer and setting output's previous layer to input layer
-		inputNeuronLayer.setPreviousLayer(null);
-		inputNeuronLayer.setNextLayer(outputNeuronLayer);
-		outputNeuronLayer.setPreviousLayer(inputNeuronLayer);
-		outputNeuronLayer.setNextLayer(null);
-		
-		weights = new ArrayList<Weight>();
-	}
+	private ArrayList<Neuron[]> neuronLayers;
 	
+	public NeuralNetwork(int... layerCounts)
+	{
+        //making sure enough layers are added
+        if (layerCounts.length < 2)
+            throw new IllegalArgumentException("must be 2 or more layers");
+        
+        neuronLayers = new ArrayList<Neuron[]>(layerCounts.length);
+        
+        for (int i = 0; i < layerCounts.length; i++)
+        	neuronLayers.add(new Neuron[layerCounts[i]]);
+        
+        //creating neurons
+        for (Neuron[] neuronLayer: neuronLayers)
+        	for (int i = 0; i < neuronLayer.length; i++)
+        		neuronLayer[i] = new Neuron();
+        
+        //creating weights
+        for (int i = 0; i < neuronLayers.size() - 1; i++)
+        {
+        	Neuron[] previousLayer = neuronLayers.get(i);
+        	Neuron[] nextLayer = neuronLayers.get(i + 1);
+        	
+        	for (Neuron previousNeuron: previousLayer)
+        	{
+        		Weight[] weights = new Weight[nextLayer.length];
+        		for (int j = 0; j < weights.length; j++)
+        		{
+        			Neuron nextNeuron = nextLayer[j];
+        			Weight weight = new Weight(previousNeuron, nextNeuron);
+        			weight.setValue(randomNormallyDistributedValue(previousLayer.length));
+        			weights[j] = weight;
+        		}
+        		previousNeuron.setNextWeights(weights);
+        	}
+        	
+        	int neuronIndex = 0;
+        	for (Neuron nextNeuron: nextLayer)
+        	{
+        		Weight[] weights = new Weight[previousLayer.length];
+        		for (int j = 0; j < weights.length; j++)
+        		{
+        			Neuron previousNeuron = previousLayer[j];
+        			weights[j] = previousNeuron.getNextWeights()[neuronIndex];
+        		}
+        		nextNeuron.setPreviousWeights(weights);
+        		
+        		neuronIndex++;
+        	}
+        }
+	}
+
 	//file io constructor get NeuralNetworkData from a binary file
 	public NeuralNetwork(String filePath)
 	{
 		setData(filePath);
 	}
-	
-	//adds a hidden
-	public void addHiddenLayer(int numOfHiddenNeurons)
-	{
-		//only able to add hidden layers if weights are not created
-		if (weights.size() == 0)
-		{
-			if (hiddenNeuronLayers.isEmpty())
-			{
-				//if this is the first hidden layer, create a new Neuron array
-				//and make its Neurons point to input and output layers
-				NeuronLayer hiddenLayer = new NeuronLayer(numOfHiddenNeurons, inputNeuronLayer, outputNeuronLayer);
-				inputNeuronLayer.setNextLayer(hiddenLayer);
-				outputNeuronLayer.setPreviousLayer(hiddenLayer);
-				
-				//add Neuron array to hiddenLayers and point inputNeurons
-				hiddenNeuronLayers.add(hiddenLayer);
-				return;
-			}
-			
-			//there are already hidden layers, create a new Neuron array
-			//and make its Neruons point to last hidden layer and output layer
-			NeuronLayer lastHiddenLayer = hiddenNeuronLayers.get(hiddenNeuronLayers.size() - 1);
-			NeuronLayer hiddenLayer = new NeuronLayer(numOfHiddenNeurons, lastHiddenLayer, outputNeuronLayer);
-			lastHiddenLayer.setNextLayer(hiddenLayer);
-			outputNeuronLayer.setPreviousLayer(hiddenLayer);
-					
-			//add hidden layer to hiddenLayers
-			hiddenNeuronLayers.add(hiddenLayer);
-		}
-	}
-	
-	public void createWeights()
-	{
-		if (weights.size() == 0)
-		{
-			//creating weights in between inputNeuron and first hidden layer or output layer
-			for (int i = 0; i < inputNeuronLayer.size(); i++)
-				inputNeuronLayer.get(i).createWeights(weights);
-			
-			//creating weights in between 2 hidden layers or last hidden layer and ouput layer
-			for (int i = 0; i < hiddenNeuronLayers.size(); i++)
-			{
-				NeuronLayer hiddenLayer = hiddenNeuronLayers.get(i);
-				for (int j = 0; j < hiddenLayer.size(); j++)
-					hiddenLayer.get(j).createWeights(weights);
-			}
-			
-			//setting the weight in output neurons to the already created weights
-			for (int i = 0; i < outputNeuronLayer.size(); i++)
-				outputNeuronLayer.get(i).createWeights(weights);
-		}
-		
-		//setting neuron count
-		neuronCount = 0;
-		neuronCount += inputNeuronLayer.size();
-		for (int i = 0; i < hiddenNeuronLayers.size(); i++)
-			neuronCount += hiddenNeuronLayers.get(i).size();
-		neuronCount += outputNeuronLayer.size();
-		
-		//setting weight count
-		weightCount = weights.size();
-	}
-	
+
 	public void train(double[] input, double[] targetOutput)
 	{
 		//forward propagation: calculates neuron output values using the input, weight and bias values
 		forwardPropagate(input);
-		
+
 		//updates all the weights and neuron biases based on target output
 		backPropagate(targetOutput);
 	}
 	
-	public void forwardPropagate(double[] input)
+	public double[] calculate(double[] input)
 	{
-		if (input.length != inputNeuronLayer.size() || weights.size() == 0)
-			throw new IllegalArgumentException();
-				
-		//setting the input and output values for the input neurons
-		for (int i = 0; i < inputNeuronLayer.size(); i++)
-			inputNeuronLayer.get(i).setOutput(input[i]);
+		forwardPropagate(input);
 		
-		//iterating through all the hidden layers
-		for (NeuronLayer hiddenNeuronLayer: hiddenNeuronLayers)
+		Neuron[] outputLayer = neuronLayers.get(neuronLayers.size() - 1);
+		double[] output = new double[outputLayer.length];
+
+		for (int i = 0; i < output.length; i ++)
+			output[i] = outputLayer[i].getOutput();
+
+		return output;
+	}
+
+	private void forwardPropagate(double[] input)
+	{
+		if (input.length != neuronLayers.get(0).length)
+			throw new IllegalArgumentException();
+		
+		//setting the output of all neurons in input layer
+		for (int i = 0; i < neuronLayers.get(0).length; i++)
+			neuronLayers.get(0)[i].setOutput(input[i]);
+		
+		//forward propagating through all other neuron layers
+		for (int i = 1; i < neuronLayers.size(); i++)
 		{
-			//iterating through all the neurons in each hidden layer
-			for (int j = 0; j < hiddenNeuronLayer.size(); j++)
+			Neuron[] neuronLayer = neuronLayers.get(i);
+			for (Neuron neuron: neuronLayer)
 			{
-				//finding current neuron
-				Neuron neuron = hiddenNeuronLayer.get(j);
+				//calculating neuron input
 				double neuronInput = neuron.getBias();
-				//calculating current neuron input and output based off the weights and inputs feeding into it
 				for (Weight weight: neuron.getPreviousWeights())
-					neuronInput += weight.getValue() * weight.getPreviousNeuron().getOutput();
+					neuronInput += weight.getValue() * weight.previousNeuron.getOutput();
 				
-				//setting the neuron input
+				//setting the neuron's input and output
 				neuron.setInput(neuronInput);
-				//setting the neuron output using the input through the activation function
 				neuron.setOutput(activation(neuronInput));
 			}
 		}
-		
-		for (int i = 0; i < outputNeuronLayer.size(); i ++)
-		{
-			//finding current neuron
-			Neuron neuron = outputNeuronLayer.get(i);
-			double neuronInput = neuron.getBias();
-			//calculating current neuron input and output based off the weights and inputs feeding into it
-			for (Weight weight: neuron.getPreviousWeights())
-				neuronInput += weight.getValue() * weight.getPreviousNeuron().getOutput();
-			
-			//setting the neuron input
-			neuron.setInput(neuronInput);
-			//setting the neuron output using the input through the activation function
-			neuron.setOutput(activation(neuronInput));
-		}
 	}
-	
+
 	private void backPropagate(double[] targetOutput)
 	{		
-		for (int i = 0; i < outputNeuronLayer.size(); i++)
-			backPropagateOutputNeuron(targetOutput, outputNeuronLayer.get(i));
-		
-		
-		//back propagating through all hidden layers and back to the targetNeuron
-		for (int i = hiddenNeuronLayers.size() - 1; i >= 0; i--)
+		int outputNeuronLayerIndex = neuronLayers.size() - 1;
+		for (int layerIndex = outputNeuronLayerIndex; layerIndex >= 0; layerIndex--)
 		{
-			NeuronLayer neuronLayer = hiddenNeuronLayers.get(i);
+			Neuron[] neuronLayer = neuronLayers.get(layerIndex);
+			for (int i = 0; i < neuronLayer.length; i++)
+			{
+				Neuron neuron = neuronLayer[i];
+				
+				//if neuron is in the output layer then use target output to calculate dError / dOutput
+				if (layerIndex == outputNeuronLayerIndex)
+					neuron.setdEdO(errorDerivative(neuron.getOutput(), targetOutput[i]));
+				//otherwise backpropagate normally
+				else
+				{
+					double dEdO = 0.0;
+					for (Weight weight: neuron.getNextWeights())
+					{
+					//	Weight weight = nextWeights[k];
+						Neuron nextNeuron = weight.nextNeuron;
+						
+						double dEdW = neuron.getOutput() * nextNeuron.getdEdI();
+						weight.setValue(weight.getValue() - LEARNING_RATE * dEdW);
+						
+						dEdO += weight.getValue() * weight.nextNeuron.getdEdI();
+					}
 
-			for (int j = 0; j < neuronLayer.size(); j++)
-				backPropagateNeuron(neuronLayer.get(j));
+					neuron.setdEdO(dEdO);
+				}
+					
+				neuron.setdEdI(activationDerivative(neuron.getInput()) * neuron.getdEdO());
+				neuron.setBias(neuron.getBias() - BIAS_LEARNING_RATE * neuron.getdEdI());
+			}
 		}
-		
-		//System.out.println(Arrays.toString(getOutput()) + ", " + Arrays.toString(targetOutput));
 	}
-	
-	private void backPropagateOutputNeuron(double[] targetOutput, Neuron neuron)
-	{
-		neuron.setdErrorOverdOutput(errorDerivative(neuron.getOutput(), targetOutput[neuron.getIndex()]));
-		neuron.setdErrorOverdInput(activationDerivative(neuron.getInput()) * neuron.getdErrorOverdOutput());
-		neuron.setBias(neuron.getBias() - BIAS_LEARNING_RATE * neuron.getdErrorOverdInput());
-	}
-	
-	private void backPropagateNeuron(Neuron neuron)
-	{
-		//setting dError/dOutput to the summation of next weights times the dError/dInput of the weights next neuron
-		double neurondErrorOverdOuput = 0.0;
-		for (Weight weight: neuron.getNextWeights())
-		{
-			Neuron nextNeuron = weight.getNextNeuron();
-			
-			weight.setdErrorOverdWeight(neuron.getOutput() * nextNeuron.getdErrorOverdInput());
-			weight.setValue(weight.getValue() - LEARNING_RATE * weight.getdErrorOverdWeight());
-			
-			neurondErrorOverdOuput += weight.getValue() * nextNeuron.getdErrorOverdInput();
-		}
-		
-		neuron.setdErrorOverdOutput(neurondErrorOverdOuput);
-		neuron.setdErrorOverdInput(activationDerivative(neuron.getInput()) * neuron.getdErrorOverdOutput());
-		neuron.setBias(neuron.getBias() - BIAS_LEARNING_RATE * neuron.getdErrorOverdInput());
-	}
-	
-	public double[] getOutput()
-	{
-		double[] output = new double[outputNeuronLayer.size()];
 
-		for (int i = 0; i < outputNeuronLayer.size(); i ++)
-			output[i] = outputNeuronLayer.get(i).getOutput();
-		
-		return output;
-	}
-	
 	public double getAccuracy(ArrayList<double[]> inputs, ArrayList<double[]> outputs)
 	{
 		int passes = 0;
-		
+
 		for (int i = 0; i < inputs.size(); i++)
 		{
 			//getting the prediction arrays from inputs array list and storing a copy of them
-			forwardPropagate(inputs.get(i));
-			double[] prediction = getOutput();
+			double[] prediction = calculate(inputs.get(i));
 			prediction = Arrays.copyOf(prediction, prediction.length);
 
 			//getting the output array
 			//no copy needed as it will not be modified
 			int outputIndex = maxIndex(outputs.get(i));
-			
+
 			//make sure the prediction is a valid move
 			int predictionIndex = maxIndex(prediction);
 			while (inputs.get(i)[predictionIndex] != DataSetInterpreter.INTERPRETED_EMPTY)
@@ -246,60 +188,40 @@ public class NeuralNetwork
 			if (predictionIndex == outputIndex)
 				passes++;	
 		}
-		
+
 		return (double) passes / inputs.size();
 	}
-	
+
 	public double getMeanSquaredError(ArrayList<double[]> inputs, ArrayList<double[]> outputs)
 	{
 		double meanSquaredError = 0;
-		
+
 		for (int i = 0; i < inputs.size(); i++)
 		{
 			//getting the prediction arrays from inputs array list and storing a copy of them
-			forwardPropagate(inputs.get(i));
-			double[] prediction = getOutput();
+			double[] prediction = calculate(inputs.get(i));
 			prediction = Arrays.copyOf(prediction, prediction.length);
 
 			//System.out.println(Arrays.toString(prediction) + "\t" + Arrays.toString(outputs.get(i)));
-			
+
 			for (int j = 0; j < prediction.length; j++)
 				meanSquaredError += error(outputs.get(i)[j], prediction[j]);
-				
+
 		}
-		
+
 		return 2 * meanSquaredError / inputs.size();
 	}
-	
-	//GETTERS AND SETTERS
-	public NeuronLayer getInputNeuronLayer() {
-		return inputNeuronLayer;
-	}
 
-	public NeuronLayer getOutputNeuronLayer() {
-		return outputNeuronLayer;
-	}
-
-	public ArrayList<NeuronLayer> getHiddenNeuronLayers() {
-		return hiddenNeuronLayers;
-	}
-	
 	//file input and output
 	public void setData(String filePath)
 	{
 		ObjectInputStream binaryInput = null;
-		
+
 		try 
 		{
 			binaryInput = new ObjectInputStream(new FileInputStream(filePath));
-			NeuralNetworkData data = (NeuralNetworkData) binaryInput.readObject();
-			inputNeuronLayer = data.inputNeuronLayer;
-			outputNeuronLayer = data.outputNeuronLayer;
-			hiddenNeuronLayers = data.hiddenNeuronLayers;
-			weights = data.weights;
-			neuronCount = data.neuronCount;
-			weightCount = data.weightCount;
-			
+			neuronLayers = (ArrayList<Neuron[]>) binaryInput.readObject();
+
 			binaryInput.close();
 		} 
 		catch (FileNotFoundException e) 
@@ -315,15 +237,15 @@ public class NeuralNetwork
 			e.printStackTrace();
 		}
 	}
-	
+
 	public void saveData(String filePath)
 	{
 		ObjectOutputStream binaryOutput = null;
 		try 
 		{
 			binaryOutput = new ObjectOutputStream(new FileOutputStream(filePath));
-			binaryOutput.writeObject(new NeuralNetworkData(inputNeuronLayer, outputNeuronLayer, hiddenNeuronLayers, weights, neuronCount, weightCount));
-			
+			binaryOutput.writeObject(neuronLayers);
+
 			binaryOutput.close();
 		} 
 		catch (IOException e) 
@@ -331,44 +253,44 @@ public class NeuralNetwork
 			e.printStackTrace();
 		}
 	}
-	
+
 	//activation function
 	public static double activation(double x)
 	{
 		return 1 / (1 + Math.exp(-x));
 	}
-	
+
 	//derivative of activation function
 	public static double activationDerivative(double x)
 	{
 		return activation(x) * (1 - activation(x));
 	}
-	
+
 	//error function
 	public static double error(double output, double targetOutput)
 	{
 		return 0.5 * Math.pow(output - targetOutput, 2.0);
 	}
-	
+
 	//derivative of error function
 	public static double errorDerivative(double output, double targetOutput)
 	{
 		return output - targetOutput;
 	}
-	
+
 	//random normally distributed number
 	public static double randomNormallyDistributedValue(double divisior)
 	{
 		Random random = new Random();
 		return random.nextGaussian() / Math.sqrt(divisior);
 	}
-	
+
 	//returns max index of array
 	public static int maxIndex(double[] array)
 	{
 		int index = 0;
 		double max = Double.MIN_VALUE;
-		
+
 		for (int i = 0; i < array.length; i++)
 		{
 			if (array[i] > max)
